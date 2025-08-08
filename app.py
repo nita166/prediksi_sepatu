@@ -1,5 +1,5 @@
 # ============================================================
-# 👟 SHOE PRICE PREDICTION APP
+# 🌳 SHOE PRICE PREDICTION APP - DECISION TREE
 # ============================================================
 
 import streamlit as st
@@ -7,29 +7,69 @@ import joblib
 import pandas as pd
 import os
 
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeRegressor
+
 # ============================================================
-# 1️⃣ Load Best Model
+# 1️⃣ Definisi Pipeline Pra-pemrosesan
+# ============================================================
+def create_preprocessor():
+    """
+    Membangun ulang ColumnTransformer untuk pra-pemrosesan data numerik.
+    Ini adalah cara yang lebih stabil daripada memuatnya dari file, 
+    karena model Decision Tree Anda dilatih hanya dengan fitur numerik.
+    """
+    # Kolom numerik yang akan diskalakan
+    numeric_features = ['How_Many_Sold', 'RATING']
+    
+    # Membuat transformer untuk kolom numerik
+    numeric_transformer = StandardScaler()
+    
+    # Menggabungkan transformer ke dalam ColumnTransformer
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_features)
+        ],
+        remainder='passthrough'
+    )
+    return preprocessor
+
+# ============================================================
+# 2️⃣ Load Model dan Gabungkan ke dalam Pipeline
 # ============================================================
 @st.cache_resource
-def load_model():
+def load_model_pipeline():
     """
-    Memuat pipeline model dari file .pkl.
-    Fungsi ini menggunakan st.cache_resource agar model hanya dimuat sekali.
+    Memuat model Decision Tree yang sudah terlatih dari file .pkl
+    dan menggabungkannya ke dalam pipeline pra-pemrosesan yang baru dibuat.
     """
-    model_path = "model_sepatu.pkl"
+    model_path = "model_sepatu_tree.pkl"
     if not os.path.exists(model_path):
-        st.error(f"❌ File model '{model_path}' tidak ditemukan.")
+        st.error(f"❌ File model '{model_path}' tidak ditemukan. Pastikan Anda sudah menjalankan script untuk membuat file ini.")
         st.stop()
-    return joblib.load(model_path)
 
-try:
-    model = load_model()
-except Exception as e:
-    st.error(f"❌ Gagal memuat model: {e}")
-    st.stop()
+    try:
+        # Memuat hanya model DecisionTreeRegressor yang telah dilatih
+        trained_model = joblib.load(model_path)
+        
+        # Membuat ulang preprocessor
+        preprocessor = create_preprocessor()
+        
+        # Membuat pipeline akhir yang menggabungkan preprocessor dan model
+        final_pipeline = Pipeline(steps=[
+            ('preprocessor', preprocessor),
+            ('regressor', trained_model) # Menggunakan 'regressor' sebagai nama step
+        ])
+        
+        return final_pipeline
+    except Exception as e:
+        st.error(f"❌ Gagal memuat model: {e}. Pastikan versi pustaka Anda konsisten.")
+        st.stop()
 
 # ============================================================
-# 2️⃣ App Configuration
+# 3️⃣ App Configuration
 # ============================================================
 st.set_page_config(
     page_title="Prediksi Harga Sepatu",
@@ -37,40 +77,31 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("👟 Aplikasi Prediksi Harga Sepatu")
+st.title("👟 Aplikasi Prediksi Harga Sepatu (Decision Tree)")
 st.markdown("Masukkan detail sepatu untuk memprediksi harga.")
 
 # ============================================================
-# 3️⃣ Input Form
+# 4️⃣ Input Form
 # ============================================================
 with st.form("shoe_price_form"):
     st.subheader("📝 Masukkan Detail Sepatu")
     
-    # Daftar brand yang umum dari dataset
-    brand_options = [
-        "ASIAN", "Reebok", "Puma", "Generic", "Sparx", "BATA", 
-        "Robbie jones", "Campus", "Bourge", "Adidas", "Nivia"
-    ]
-    
-    # Input untuk fitur-fitur yang digunakan model
-    brand_name = st.selectbox("Nama Merek", options=brand_options)
+    # Karena model Decision Tree dilatih hanya dengan fitur numerik,
+    # input yang diperlukan hanya 'How_Many_Sold' dan 'RATING'.
     how_many_sold = st.number_input("Jumlah Terjual (misal: 2242)", min_value=0)
     rating = st.slider("Rating Produk", min_value=0.0, max_value=5.0, value=4.0, step=0.1)
-    product_details = st.text_area("Detail Produk", value="Oxygen-01 Sports Running,Walking & Gym Shoes with Oxygen Technology Lightweight Casual Sneaker Shoes for Men's & Boy's")
     
     submitted = st.form_submit_button("🔮 Prediksi Harga")
     
     if submitted:
         try:
-            # Buat DataFrame dari input mentah pengguna
+            # Buat DataFrame dari input pengguna
             input_data = pd.DataFrame([{
-                'Brand_Name': brand_name,
                 'How_Many_Sold': how_many_sold,
-                'Product_details': product_details,
                 'RATING': rating
             }])
             
-            # Prediksi menggunakan pipeline
+            model = load_model_pipeline()
             prediction = model.predict(input_data)
             
             st.subheader("✅ Prediksi Berhasil!")
