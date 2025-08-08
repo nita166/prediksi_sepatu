@@ -1,20 +1,24 @@
-import streamlit as st
-import numpy as np
+from flask import Flask, request, jsonify
 import joblib
+import numpy as np
+import pandas as pd
 
-# Load model
+app = Flask(__name__)
 model = joblib.load('model_sepatu.pkl')
 
-# Judul aplikasi
-st.title("Prediksi Harga Sepatu")
-st.write("Masukkan fitur sepatu untuk memprediksi harga.")
+@app.route('/')
+def home():
+    return "✅ Aplikasi Prediksi Harga Sepatu Aktif!"
 
-# Input dari pengguna
-rating = st.number_input("Rating Produk", min_value=0.0, max_value=5.0, step=0.1)
-jumlah_terjual = st.number_input("Jumlah Terjual", min_value=0)
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.get_json(force=True)
 
-# Prediksi
-if st.button("Prediksi"):
-    input_data = np.array([[rating, jumlah_terjual]])
-    prediksi = model.predict(input_data)
-    st.success(f"Prediksi Harga Sepatu: ₹{prediksi[0]:,.2f}")
+    # Pastikan input punya kolom yang sama seperti saat training
+    df_input = pd.DataFrame([data], columns=['Brand_Name', 'How_Many_Sold', 'RATING'])
+
+    prediction = model.predict(df_input)
+    return jsonify({'prediksi_harga': float(prediction[0])})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=81)
